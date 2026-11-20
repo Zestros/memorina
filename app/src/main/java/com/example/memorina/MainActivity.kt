@@ -1,31 +1,32 @@
 package com.example.memorina
 
 
-import android.app.ActionBar
-import android.graphics.Color
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.util.AttributeSet
-import android.util.Log
 import android.view.View
-import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+import androidx.appcompat.app.AlertDialog
 
 class MainActivity : AppCompatActivity() {
+    private var firstOpenCard: ImageView? = null
+    private var isCheckingPair = false
+
+    private var pairsRemaining = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        //setContentView(R.layout.activity_main)
         val layout = LinearLayout(applicationContext)
         layout.orientation = LinearLayout.VERTICAL
 
-        val params = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT)
-        params.weight = 1.toFloat() // единичный вес
-
+        val cardMargin = (2 * resources.displayMetrics.density).roundToInt()
+        val params = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            setMargins(cardMargin, cardMargin, cardMargin, cardMargin)
+        }
 
         val faces = listOf(
             R.drawable.cat_blue,
@@ -38,6 +39,8 @@ class MainActivity : AppCompatActivity() {
             R.drawable.cat_teal
         )
 
+        pairsRemaining = faces.size
+
         val shuffledCards = (faces + faces).shuffled()
         val catViews = ArrayList<ImageView>()
 
@@ -46,6 +49,7 @@ class MainActivity : AppCompatActivity() {
                 ImageView(this).apply {
                     layoutParams = params
                     adjustViewBounds = true
+                    foreground = context.getDrawable(R.drawable.card_outline)
                     setImageResource(R.drawable.card_back)
                     tag = face
                     setOnClickListener(colorListener)
@@ -67,27 +71,42 @@ class MainActivity : AppCompatActivity() {
         setContentView(layout)
     }
 
-    suspend fun setBackgroundWithDelay(v: View) {
-        delay(1000)
-        v.setBackgroundColor(Color.YELLOW)
-        delay(1000)
-        v.visibility = View.INVISIBLE
-        v.isClickable = false
-    }
+    private val colorListener = View.OnClickListener { view ->
+        if (isCheckingPair || !view.isClickable) return@OnClickListener
 
-    suspend fun openCards() {
-
-    }
-
-    // обработчик нажатия на кнопку
-    val colorListener = View.OnClickListener { view ->
         val card = view as ImageView
-        card.setImageResource(card.tag as Int)
+        val face = card.tag as Int
+        card.setImageResource(face)
         card.isClickable = false
 
-        card.postDelayed({
+        val firstCard = firstOpenCard
+        if (firstCard == null) {
+            firstOpenCard = card
+            return@OnClickListener
+        }
+
+        firstOpenCard = null
+        if (firstCard.tag == face) {
+            pairsRemaining--
+
+            if (pairsRemaining == 0) {
+                AlertDialog.Builder(this)
+                    .setMessage("Победа")
+                    .setPositiveButton("Все", null)
+                    .show()
+            }
+
+            return@OnClickListener
+        }
+
+        isCheckingPair = true
+        lifecycleScope.launch {
+            delay(1000L)
+            firstCard.setImageResource(R.drawable.card_back)
             card.setImageResource(R.drawable.card_back)
+            firstCard.isClickable = true
             card.isClickable = true
-        }, 1000L)
+            isCheckingPair = false
+        }
     }
 }
